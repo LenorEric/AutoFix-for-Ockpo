@@ -62,7 +62,6 @@ fn check_req() -> bool {
     }
 }
 
-/// 遍历 + 并发解密：最多同时保持 10 个子进程
 fn recursive_decrypt(
     father_path: &Box<Path>,
     proc_path: &Box<Path>,
@@ -70,9 +69,12 @@ fn recursive_decrypt(
     children: &mut Vec<Child>,
 ) -> io::Result<()> {
     let current_exe = env::current_exe()?;
+    let exe_dir = current_exe.parent().unwrap();
     for entry in fs::read_dir(proc_path)? {
         let entry = entry?;
         let path = entry.path();
+
+        let rel = path.strip_prefix(exe_dir).unwrap_or(&path);
 
         if path.is_file() {
             let path_str = path.to_str().unwrap();
@@ -83,18 +85,18 @@ fn recursive_decrypt(
             }
             // 跳过扩展名
             if should_skip_file(&path, skip_list) {
-                println!("Skipping: {:?}", path);
+                println!("Skipping: {:?}", rel);
                 continue;
             }
 
             if check_is_encrypted(path_str) {
                 // 如果队列已满，先等待最早的一个
-                if children.len() >= 10 {
+                if children.len() >= 4 {
                     let mut first = children.remove(0);
                     first.wait()?;
                 }
                 // spawn 解密进程
-                println!("Decrypting: {:?}", path);
+                println!("Decrypting: {:?}", rel);
                 let child = Command::new("cmd")
                     .arg("/c")
                     .arg(format!(".\\code.exe -s {}", path_str))
