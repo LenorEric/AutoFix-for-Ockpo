@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::{fs, env, io};
 use std::io::{prelude::*, BufReader};
-use std::process::Command;
+use std::process::{Command, Child, Stdio};
 
 const FAKE_ENCRYPTED_HEADER: [u8; 16] = [0x62, 0x14, 0x23, 0x65, 0x3f, 0x00, 0x13, 0x01,
     0x0d, 0x0a, 0x0d, 0x0a, 0x0d, 0x0a, 0x0d, 0x0a];
@@ -53,12 +53,6 @@ fn check_is_encrypted(src: &str) -> bool {
     false
 }
 
-fn decrypt_file(src: &str) -> io::Result<()> {
-    let cmd_str = format!(".\\code.exe -s {}", src, ).to_string();
-    Command::new("cmd").arg("/c").arg(cmd_str).output().expect("cmd exec error!");
-    Ok(())
-}
-
 fn check_req() -> bool {
     let file_name = "code.exe";
     if Path::new(file_name).exists() {
@@ -68,27 +62,50 @@ fn check_req() -> bool {
     }
 }
 
-fn recursive_decrypt(father_path: &Box<Path>, proc_path: &Box<Path>, skip_list: &[String]) -> io::Result<()> {
-    let current_exe_path = env::current_exe()?;
+/// 遍历 + 并发解密：最多同时保持 10 个子进程
+fn recursive_decrypt(
+    father_path: &Box<Path>,
+    proc_path: &Box<Path>,
+    skip_list: &[String],
+    children: &mut Vec<Child>,
+) -> io::Result<()> {
+    let current_exe = env::current_exe()?;
     for entry in fs::read_dir(proc_path)? {
         let entry = entry?;
         let path = entry.path();
+
         if path.is_file() {
-            if are_same_file(current_exe_path.to_str().unwrap(), path.to_str().unwrap())? {
+            let path_str = path.to_str().unwrap();
+
+            // 跳过自己
+            if are_same_file(current_exe.to_str().unwrap(), path_str)? {
                 continue;
             }
-
+            // 跳过扩展名
             if should_skip_file(&path, skip_list) {
                 println!("Skipping: {:?}", path);
                 continue;
             }
 
-            println!("Checking: {:?}", path);
-            if check_is_encrypted(path.to_str().unwrap()) {
-                decrypt_file(path.to_str().unwrap())?;
+            if check_is_encrypted(path_str) {
+                // 如果队列已满，先等待最早的一个
+                if children.len() >= 10 {
+                    let mut first = children.remove(0);
+                    first.wait()?;
+                }
+                // spawn 解密进程
+                println!("Decrypting: {:?}", path);
+                let child = Command::new("cmd")
+                    .arg("/c")
+                    .arg(format!(".\\code.exe -s {}", path_str))
+                    .stdout(Stdio::null())     // 不打印 stdout
+                    .stderr(Stdio::null())     // 不打印 stderr
+                    .spawn()
+                    .expect("cmd exec error!");
+                children.push(child);
             }
         } else if path.is_dir() {
-            recursive_decrypt(father_path, &Box::from(path.clone()), skip_list)?
+            recursive_decrypt(father_path, &Box::from(path.clone()), skip_list, children)?;
         }
     }
     Ok(())
@@ -101,8 +118,20 @@ fn main() -> io::Result<()> {
     }
 
     let skip_list = read_skip_list();
-
     let current_dir = env::current_dir()?;
-    recursive_decrypt(&Box::from(current_dir.clone()), &Box::from(current_dir.clone()), &skip_list)?;
+    let mut children: Vec<Child> = Vec::new();
+
+    recursive_decrypt(
+        &Box::from(current_dir.clone()),
+        &Box::from(current_dir.clone()),
+        &skip_list,
+        &mut children,
+    )?;
+
+    // 等待剩余的解密进程完成
+    for mut c in children {
+        c.wait()?;
+    }
+
     Ok(())
 }
