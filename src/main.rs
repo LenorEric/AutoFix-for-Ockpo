@@ -101,7 +101,7 @@ fn recursive_decrypt(
                 println!("Decrypting: {:?}", rel);
                 let child = Command::new("cmd")
                     .arg("/c")
-                    .arg(format!(".\\code.exe -s {}", path_str))
+                    .args([".\\code.exe", "-s", path_str])
                     .stdout(Stdio::null())     // 不打印 stdout
                     .stderr(Stdio::null())     // 不打印 stderr
                     .spawn()
