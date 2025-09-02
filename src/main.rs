@@ -87,7 +87,7 @@ fn recursive_decrypt(
             }
             // 跳过扩展名
             if should_skip_file(&path, skip_list) {
-                println!("Skipping: {:?}", rel);
+                // println!("Skipping: {:?}", rel);
                 continue;
             }
 
