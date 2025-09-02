@@ -6,7 +6,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 const ENCRYPTED_HEADER: [u8; 16] = [0x62, 0x14, 0x23, 0x65, 0x3f, 0x00, 0x13, 0x01,
     0x0d, 0x0a, 0x0d, 0x0a, 0x0d, 0x0a, 0x0d, 0x0a];
-const ENCRYPTED_HEADER_SHORT: [u8; 4] = [0x77, 0x14, 0x23, 0x65];
 
 static PROCESSED_COUNT: AtomicUsize  = AtomicUsize::new(0);
 
@@ -49,7 +48,7 @@ fn check_is_encrypted(src: &str) -> bool {
         let mut buffer = [0u8; 4];
         let bytes_read = read_stream.read(&mut buffer).unwrap();
         if bytes_read == 4 {
-            if buffer == ENCRYPTED_HEADER[0..4] || buffer == ENCRYPTED_HEADER_SHORT[0..4] {
+            if buffer[1..4] == ENCRYPTED_HEADER[1..4] {
                 return true;
             }
         }
