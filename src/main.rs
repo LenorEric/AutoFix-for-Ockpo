@@ -2,11 +2,13 @@ use std::path::Path;
 use std::{fs, env, io};
 use std::io::{prelude::*, BufReader};
 use std::process::{Command, Child, Stdio};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 const ENCRYPTED_HEADER: [u8; 16] = [0x62, 0x14, 0x23, 0x65, 0x3f, 0x00, 0x13, 0x01,
     0x0d, 0x0a, 0x0d, 0x0a, 0x0d, 0x0a, 0x0d, 0x0a];
-
 const ENCRYPTED_HEADER_SHORT: [u8; 4] = [0x77, 0x14, 0x23, 0x65];
+
+static PROCESSED_COUNT: AtomicUsize  = AtomicUsize::new(0);
 
 fn read_skip_list() -> Vec<String> {
     let mut skip_list = Vec::new();
@@ -79,6 +81,10 @@ fn recursive_decrypt(
         let rel = path.strip_prefix(exe_dir).unwrap_or(&path);
 
         if path.is_file() {
+            PROCESSED_COUNT.fetch_add(1, Ordering::Relaxed);
+            if PROCESSED_COUNT.load(Ordering::Relaxed) % 1000 == 0 {
+                println!("Processed {} files...", PROCESSED_COUNT.load(Ordering::Relaxed));
+            }
             let path_str = path.to_str().unwrap();
 
             // 跳过自己
