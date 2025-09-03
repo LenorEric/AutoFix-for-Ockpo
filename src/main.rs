@@ -103,7 +103,7 @@ fn recursive_decrypt(
                     first.wait()?;
                 }
                 // spawn 解密进程
-                println!("Decrypting: {:?}", rel);
+                println!("Fixing: {:?}", rel);
                 let child = Command::new("cmd")
                     .arg("/c")
                     .args([".\\code.exe", "-s", path_str])
